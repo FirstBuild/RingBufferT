@@ -27,10 +27,10 @@ CPPUTEST_CXX_WARNINGFLAGS += -Wno-reserved-id-macro -Wno-keyword-macro
 # when using std library includes like <list> and other containers
 # so that memory leak detection does not conflict with stl.
 #CPPUTEST_MEMLEAK_DETECTOR_NEW_MACRO_FILE = -include ApplicationLib/ExamplesNewOverrides.h
-#SRC_DIRS = \
+SRC_DIRS = \
+	    src \
 
 SRC_FILES = \
-	    src/RingBufT.cpp \
 	    
 TEST_SRC_DIRS = \
 	extras/Testing/ \

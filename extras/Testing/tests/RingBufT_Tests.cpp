@@ -16,328 +16,265 @@ extern "C"
 {
 }
 
-static T_RingBufferCB rbcb;
-static uint8_t buf[10];
 
 TEST_GROUP(ringBufTests)
 {
+   uint8_t buf[10];
+   RingBufT<uint8_t> *ringBuf;
+
    void fillBuffer() 
    {
       uint8_t i;
 
-      RingBuffer_Init(&rbcb, &buf[0], sizeof(buf));
-
       for (i=0; i<sizeof(buf); i++) 
       {
-         RingBuffer_Write(&rbcb, i);
+         ringBuf->Write(&i);
       }
    }
 
    void setup()
    {
+      ringBuf = new RingBufT<uint8_t>(buf, sizeof(buf)/sizeof(uint8_t));
    }
 
    void teardown()
    {
+      delete ringBuf;
    }
 };
 
-TEST(ringBufTests, compile)
+TEST(ringBufTests, BufferIsNotInitializedIfDataIsNull)
 {
+   RingBufT<uint8_t> myBuf(NULL, 3);
+   BYTES_EQUAL(RingBufT_Failure, myBuf.IsFull());
 }
 
-TEST(ringBufTests, ringBufInitCompile)
+TEST(ringBufTests, BufferIsNotInitializedIfSizeIsZero)
 {
-   RingBuffer_Init(&rbcb, &buf[0], sizeof(buf));
+   uint8_t buf[10];
+   RingBufT<uint8_t> myBuf(buf, 0);
+   BYTES_EQUAL(RingBufT_Failure, myBuf.IsFull());
 }
 
-TEST(ringBufTests, checkpBufNullReturnsZero)
+TEST(ringBufTests, InitializesCorrectly)
 {
-   BYTES_EQUAL(RING_BUFFER_INIT_FAILURE, RingBuffer_Init(&rbcb, NULL, sizeof(buf)));
+   BYTES_EQUAL(RingBufT_IsNotFull, ringBuf->IsFull());
+   BYTES_EQUAL(RingBufT_IsEmpty, ringBuf->IsEmpty());
+   BYTES_EQUAL(0, ringBuf->ElementsUsed());
+   BYTES_EQUAL(sizeof(buf)/sizeof(uint8_t), ringBuf->ElementsAvailable());
 }
 
-TEST(ringBufTests, checkSizeGreaterThanZero)
+TEST(ringBufTests, WriteWithNullPointerFails)
 {
-   BYTES_EQUAL(RING_BUFFER_INIT_FAILURE, RingBuffer_Init(&rbcb, &buf[0], 0));
+   BYTES_EQUAL(RingBufT_Failure, ringBuf->Write(NULL));
 }
 
-TEST(ringBufTests, checkNullControlBlockReturnsZero)
-{
-   BYTES_EQUAL(RING_BUFFER_INIT_FAILURE, RingBuffer_Init(NULL, &buf[0], sizeof(buf)));
-}
-
-TEST(ringBufTests, checkControlBlockInitializedCorrectly)
-{
-   memset((uint8_t*)&rbcb, 42, sizeof(rbcb));
-
-   RingBuffer_Init(&rbcb, &buf[0], sizeof(buf));
-   BYTES_EQUAL(0, rbcb.head);
-   BYTES_EQUAL(0, rbcb.tail);
-   BYTES_EQUAL(RING_BUFFER_NOT_FULL, rbcb.full);
-   BYTES_EQUAL(RING_BUFFER_IS_EMPTY, rbcb.empty);
-   BYTES_EQUAL(sizeof(buf), rbcb.size);
-   POINTERS_EQUAL(&buf[0], rbcb.pBuf);
-   BYTES_EQUAL(0, rbcb.bytesUsed);
-}
-
-TEST(ringBufTests, compileRingBufferWrite)
-{
-   RingBuffer_Write(&rbcb, 42);
-}
-
-TEST(ringBufTests, ringBufferCheckNullControlBlockPointer)
-{
-   BYTES_EQUAL(RING_BUFFER_ADD_FAILURE, RingBuffer_Write(NULL, 42));
-}
-
-TEST(ringBufTests, checkByteAddedToBuffer)
+TEST(ringBufTests, CanAddBytesToBuffer)
 {
    uint8_t i;
 
    memset(&buf[0], 42, sizeof(buf));
-   RingBuffer_Init(&rbcb, &buf[0], sizeof(buf));
 
    for (i=0; i<sizeof(buf); i++) {
-      RingBuffer_Write(&rbcb, i);
+      ringBuf->Write(&i);
       BYTES_EQUAL(i, buf[i]);
-      BYTES_EQUAL(i+1, rbcb.bytesUsed);
+      BYTES_EQUAL(i+1, ringBuf->ElementsUsed());
    }
 
-   BYTES_EQUAL(RING_BUFFER_NOT_EMPTY, rbcb.empty);
-   BYTES_EQUAL(0, rbcb.tail);
+   BYTES_EQUAL(RingBufT_IsNotEmpty, ringBuf->IsEmpty());
+   BYTES_EQUAL(RingBufT_IsFull, ringBuf->IsFull());
 }
 
-TEST(ringBufTests, checkBufferFull)
+TEST(ringBufTests, AddingBytesToAFullBufferFails)
 {
+   uint8_t val = 42;
    fillBuffer();
-   BYTES_EQUAL(RING_BUFFER_IS_FULL, rbcb.full);
+   BYTES_EQUAL(RingBufT_Failure, ringBuf->Write(&val));
 }
 
-TEST(ringBufTests, checkThatAddToFullBufferFails)
+TEST (ringBufTests, ReadFailsIfDestinationBufferIsNull)
 {
+   BYTES_EQUAL(RingBufT_Failure, ringBuf->Read(NULL));
+}
+
+TEST (ringBufTests, ReadFromEmptyBufferFails)
+{
+   uint8_t dest;
+
+   BYTES_EQUAL(RingBufT_Failure, ringBuf->Read(&dest));
+}
+
+TEST (ringBufTests, ReadReturnsExpectedValue)
+{
+   uint8_t src = 42;
+   uint8_t dest;
+   ringBuf->Write(&src);
+   BYTES_EQUAL(RingBufT_Success, ringBuf->Read(&dest));
+   BYTES_EQUAL(42, dest);
+}
+
+TEST (ringBufTests, ReadingShouldDecrementElementsUsed)
+{
+   uint8_t dest;
    fillBuffer();
-   BYTES_EQUAL(RING_BUFFER_ADD_FAILURE, RingBuffer_Write(&rbcb, 42));
+   ringBuf->Read(&dest);
+   BYTES_EQUAL(9, ringBuf->ElementsUsed());
 }
 
-TEST(ringBufTests, compileRead)
-{
-   RingBuffer_Read(&rbcb);
-}
-
-TEST (ringBufTests, checkNullPointer)
-{
-   BYTES_EQUAL(0xff, RingBuffer_Read(NULL));
-}
-
-TEST (ringBufTests, readFromEmptyBufferReturnsFF)
-{
-   RingBuffer_Init(&rbcb, &buf[0], sizeof(buf));
-
-   BYTES_EQUAL(0xff, RingBuffer_Read(&rbcb));
-}
-
-TEST (ringBufTests, checkThatReadReturnsValue)
-{
-   RingBuffer_Init(&rbcb, &buf[0], sizeof(buf));
-   RingBuffer_Write(&rbcb, 42);
-   BYTES_EQUAL(42, RingBuffer_Read(&rbcb));
-}
-
-TEST (ringBufTests, checkThatReadDecrementsBytesUsed)
-{
-   fillBuffer();
-   RingBuffer_Read(&rbcb);
-   BYTES_EQUAL(9, rbcb.bytesUsed);
-}
-
-TEST (ringBufTests, checkReadOfFullBufferContents)
+TEST (ringBufTests, DataReadShouldEqualDataWritten)
 {
    uint8_t i;
+   uint8_t dest;
 
    fillBuffer();
 
    for(i=0; i<sizeof(buf); i++) {
-      BYTES_EQUAL(i, RingBuffer_Read(&rbcb));
+      BYTES_EQUAL(RingBufT_Success, ringBuf->Read(&dest));
+      BYTES_EQUAL(i, dest);
    }
 }
 
-TEST (ringBufTests, checkReadFromFullBufferResultsInNotFull)
+TEST (ringBufTests, AFullBufferShouldBecomeNotFullAfterARead)
 {
+   uint8_t dest;
    fillBuffer();
 
-   RingBuffer_Read(&rbcb);
-   BYTES_EQUAL(RING_BUFFER_NOT_FULL, rbcb.full);
+   ringBuf->Read(&dest);
+   BYTES_EQUAL(RingBufT_IsNotFull, ringBuf->IsFull());
 }
 
-TEST(ringBufTests, afterReadingFullBufferHeadPointsToZero)
+TEST(ringBufTests, BufferShouldBeEmptyAfterReadingAllElements)
 {
+   uint8_t dest;
    uint8_t i;
 
    fillBuffer();
 
    for(i=0; i<sizeof(buf); i++) 
    {
-      RingBuffer_Read(&rbcb);
+      ringBuf->Read(&dest);
    }
 
-   BYTES_EQUAL(0, rbcb.head);
+   BYTES_EQUAL(RingBufT_IsEmpty, ringBuf->IsEmpty());
 }
 
-TEST(ringBufTests, afterReadingLastByteBufferIsEmpty)
+TEST(ringBufTests, NotEmptyRingBufferReturnsNotEmpty)
 {
-   RingBuffer_Init(&rbcb, &buf[0], sizeof(buf));
-   RingBuffer_Write(&rbcb, 42);
-   RingBuffer_Read(&rbcb);
-   BYTES_EQUAL(RING_BUFFER_IS_EMPTY, rbcb.empty);
+   uint8_t src = 42;
+   ringBuf->Write(&src);
+
+   BYTES_EQUAL(RingBufT_IsNotEmpty, ringBuf->IsEmpty());
 }
 
-TEST(ringBufTests, compileRingBufferIsEmpty)
-{
-   RingBuffer_IsEmpty(&rbcb);
-}
-
-TEST(ringBufTests, isEmptyReturnsBadPointer)
-{
-   BYTES_EQUAL(RING_BUFFER_BAD_CONTROL_BLOCK_POINTER, RingBuffer_IsEmpty(NULL));
-}
-
-TEST(ringBufTests, emptyRingBufferReturnsEmpty)
-{
-   RingBuffer_Init(&rbcb, &buf[0], sizeof(buf));
-
-   BYTES_EQUAL(RING_BUFFER_IS_EMPTY, RingBuffer_IsEmpty(&rbcb));
-}
-
-TEST(ringBufTests, notEmptyRingBufferReturnsNotEmpty)
-{
-   RingBuffer_Init(&rbcb, &buf[0], sizeof(buf));
-   RingBuffer_Write(&rbcb, 42);
-
-   BYTES_EQUAL(RING_BUFFER_NOT_EMPTY, RingBuffer_IsEmpty(&rbcb));
-}
-
-TEST(ringBufTests, compileRingBufferFull)
-{
-   RingBuffer_IsFull(&rbcb);
-}
-
-TEST(ringBufTests, isFullReturnsBadPointer)
-{
-   BYTES_EQUAL(RING_BUFFER_BAD_CONTROL_BLOCK_POINTER, RingBuffer_IsFull(NULL));
-}
-
-TEST(ringBufTests, isFullReturnsFullWhenFull) {
+TEST(ringBufTests, IsFullReturnsFullWhenFull) {
    fillBuffer();
-   BYTES_EQUAL(RING_BUFFER_IS_FULL, RingBuffer_IsFull(&rbcb));
+   BYTES_EQUAL(RingBufT_IsFull, ringBuf->IsFull());
 }
 
-TEST(ringBufTests, isFullReturnsNotFullWhenNotFull) {
-   RingBuffer_Init(&rbcb, &buf[0], sizeof(buf));
-   BYTES_EQUAL(RING_BUFFER_NOT_FULL, RingBuffer_IsFull(&rbcb));
+TEST(ringBufTests, IsFullReturnsNotFullWhenNotFull) {
+   uint8_t src = 42;
+   ringBuf->Write(&src);
+   BYTES_EQUAL(RingBufT_IsNotFull, ringBuf->IsFull());
 }
 
-TEST(ringBufTests, compilePeek)
+TEST(ringBufTests, PeekFailsIfDestinationPointerIsNull)
 {
-   RingBuffer_Peek(&rbcb, 0);
+   BYTES_EQUAL(RingBufT_Failure, ringBuf->Peek(NULL, 0));
 }
 
-TEST(ringBufTests, peekNullPointerCheck)
+TEST(ringBufTests, PeekFailsIfPositionIsBad)
 {
-   BYTES_EQUAL(0xff, RingBuffer_Peek(NULL, 0));
+   uint8_t dest;
+   BYTES_EQUAL(RingBufT_Failure, ringBuf->Peek(&dest, sizeof(buf) + 1));
 }
 
-TEST(ringBufTests, peekBadPositionReturnsFail)
+TEST(ringBufTests, PeekFailsIfBufferIsEmpty)
 {
-   BYTES_EQUAL(0xff, RingBuffer_Peek(&rbcb, sizeof(buf) + 1));
+   uint8_t dest;
+   BYTES_EQUAL(RingBufT_Failure, ringBuf->Peek(&dest, 1));
 }
 
-TEST(ringBufTests, peekFromEmptyBufReturnsFail)
+TEST(ringBufTests, PeekFailsIfPositionIsInvalid)
 {
-   RingBuffer_Init(&rbcb, &buf[0], sizeof(buf));
-   BYTES_EQUAL(0xff, RingBuffer_Peek(&rbcb, 1));
+   uint8_t src;
+   uint8_t dest;
+   ringBuf->Write(&src);
+   BYTES_EQUAL(RingBufT_Failure, ringBuf->Peek(&dest, 1));
 }
 
-TEST(ringBufTests, peekAttemptToReadBeyondAvailableFails)
-{
-   RingBuffer_Init(&rbcb, &buf[0], sizeof(buf));
-   RingBuffer_Write(&rbcb, 42);
-   BYTES_EQUAL(0xff, RingBuffer_Peek(&rbcb, 1));
-}
-
-TEST(ringBufTests, peekCheckPeekNormal)
+TEST(ringBufTests, CanPeekEveryElement)
 {
    uint8_t i;
+   uint8_t dest;
 
    fillBuffer();
 
    for(i=0; i<sizeof(buf); i++) {
-      BYTES_EQUAL(i, RingBuffer_Peek(&rbcb, i));
+      BYTES_EQUAL(RingBufT_Success, ringBuf->Peek(&dest, i));
+      BYTES_EQUAL(i, dest);
    }
 }
 
-TEST(ringBufTests, peekCheckWrapCase)
+TEST(ringBufTests, PeekWorksWithWrapAround)
 {
    uint8_t i;
-   uint8_t retVal;
+   int8_t retVal;
+   uint8_t dest;
 
    fillBuffer();
 
    for (i=0; i<4; i++) {
-      RingBuffer_Read(&rbcb);
+      ringBuf->Read(&dest);
    }
 
    i = 10;
    do {
-      retVal = RingBuffer_Write(&rbcb, i++);
-   } while(retVal != RING_BUFFER_ADD_FAILURE);
+      retVal = ringBuf->Write(&i);
+      i++;
+   } while(retVal != RingBufT_Failure);
 
-   BYTES_EQUAL(13, RingBuffer_Peek(&rbcb, 8));
+   BYTES_EQUAL(RingBufT_Success, ringBuf->Peek(&dest, 8));
+   BYTES_EQUAL(13, dest);
 }
 
-
-TEST(ringBufTests, compileBytesUsed)
+TEST(ringBufTests, ElementsUsedIsZeroIfBufferIsEmpty)
 {
-   RingBuffer_BytesUsed(&rbcb);
+   BYTES_EQUAL(0, ringBuf->ElementsUsed());
 }
 
-TEST(ringBufTests, bytesUsedCheckNullPointer)
-{
-   BYTES_EQUAL(0xff, RingBuffer_BytesUsed(NULL));
-}
-
-TEST(ringBufTests, bytesUsedReturns0WhenBufEmpty)
-{
-   RingBuffer_Init(&rbcb, &buf[0], sizeof(buf));
-   BYTES_EQUAL(0, RingBuffer_BytesUsed(&rbcb));
-}
-
-TEST(ringBufTests, bytesUsedReturnsSizeOfWhenFull)
+TEST(ringBufTests, ElementsUsedReturnsSizeOfWhenFull)
 {
    fillBuffer();
 
-   BYTES_EQUAL(sizeof(buf), RingBuffer_BytesUsed(&rbcb));
+   BYTES_EQUAL(sizeof(buf), ringBuf->ElementsUsed());
 }
 
-TEST(ringBufTests, compileBytesAvailable)
+TEST(ringBufTests, ElementsAvailableReturnsBufSizeWhenEmpty)
 {
-   RingBuffer_BytesAvailable(&rbcb);
+   BYTES_EQUAL(sizeof(buf), ringBuf->ElementsAvailable());
 }
 
-TEST(ringBufTests, bytesAvailableNullPointerCheck)
-{
-   BYTES_EQUAL(0xff, RingBuffer_BytesAvailable(NULL));
-}
-
-TEST(ringBufTests, bytesAvailableReturnsBufSizeWhenEmpty)
-{
-   RingBuffer_Init(&rbcb, &buf[0], sizeof(buf));
-   BYTES_EQUAL(sizeof(buf), RingBuffer_BytesAvailable(&rbcb));
-}
-
-TEST(ringBufTests, bytesAvailableReturns0WhenFull)
+TEST(ringBufTests, ElementsAvailableReturns0WhenFull)
 {
    fillBuffer();
-   BYTES_EQUAL(0, RingBuffer_BytesAvailable(&rbcb));
+   BYTES_EQUAL(0, ringBuf->ElementsAvailable());
 }
 
+TEST(ringBufTests, WrapAroundIsHandled)
+{
+   uint8_t i;
+   uint8_t dest;
+
+   for (i=0; i<5; i++) ringBuf->Write(&i);
+   BYTES_EQUAL(5, ringBuf->ElementsUsed());
+
+   for (i=0; i<5; i++) ringBuf->Read(&dest);
+   BYTES_EQUAL(0, ringBuf->ElementsUsed());
+
+   fillBuffer();
+   for (i=0; i<10; i++) {
+      ringBuf->Read(&dest);
+      BYTES_EQUAL(i, dest);
+   }
+}
 

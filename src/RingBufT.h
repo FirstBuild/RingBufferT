@@ -25,38 +25,156 @@
  * THE SOFTWARE.
  */
 
-#ifndef RING_BUF_T_H
-#define RING_BUF_T_H
-
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 
-typedef struct T_RingBufferCB {
-   uint8_t head;
-   uint8_t tail;
-   uint8_t size;
-   uint8_t bytesUsed;
-   uint8_t empty;
-   uint8_t full;
-   uint8_t *pBuf;
-} T_RingBufferCB; 
+enum {
+   RingBufT_Failure = -1,
+   RingBufT_Success,
+   RingBufT_IsFull,
+   RingBufT_IsNotFull,
+   RingBufT_IsEmpty,
+   RingBufT_IsNotEmpty
+};
 
-#define RING_BUFFER_INIT_FAILURE 0
-#define RING_BUFFER_INIT_SUCCESS 1
-#define RING_BUFFER_IS_FULL 1
-#define RING_BUFFER_NOT_FULL 0
-#define RING_BUFFER_IS_EMPTY 1
-#define RING_BUFFER_NOT_EMPTY 0
-#define RING_BUFFER_ADD_FAILURE 0
-#define RING_BUFFER_ADD_SUCCESS 1
-#define RING_BUFFER_BAD_CONTROL_BLOCK_POINTER 2
+template <typename Type>
+class RingBufT {
+   public:
+      RingBufT(Type *pBuf, uint8_t size);
+      int8_t Write(Type * pData);
+      int8_t Read(Type * pData);
+      int8_t IsEmpty();
+      int8_t IsFull();
+      int8_t Peek(Type * pData, uint8_t pos);
+      int8_t ElementsUsed();
+      int8_t ElementsAvailable();
+   private:
+      int8_t initialized;
+      uint8_t head;
+      uint8_t tail;
+      uint8_t size;
+      uint8_t elementsUsed;
+      int8_t empty;
+      int8_t full;
+      Type *pBuf;
+};
 
-uint8_t RingBuffer_Init(T_RingBufferCB *pControlBlock, uint8_t *pBuf, uint8_t size);
-uint8_t RingBuffer_Write(T_RingBufferCB *pControlBlock, uint8_t val);
-uint8_t RingBuffer_Read(T_RingBufferCB *pControlBlock);
-uint8_t RingBuffer_IsEmpty(T_RingBufferCB *pControlBlock);
-uint8_t RingBuffer_IsFull(T_RingBufferCB *pControlBlock);
-uint8_t RingBuffer_Peek(T_RingBufferCB *pControlBlock, uint8_t pos);
-uint8_t RingBuffer_BytesUsed(T_RingBufferCB *pControlBlock);
-uint8_t RingBuffer_BytesAvailable(T_RingBufferCB *pControlBlock);
+template <typename Type>
+RingBufT<Type>::RingBufT(Type *_pBuf, uint8_t _size) {
+   initialized = RingBufT_Failure;
 
-#endif // RING_BUF_T_H
+   if ((_pBuf != NULL) && (_size != 0)) {
+      head = 0;
+      tail = 0;
+      size = _size;
+      pBuf = _pBuf;
+      full = RingBufT_IsNotFull;
+      empty = RingBufT_IsEmpty;
+      elementsUsed = 0;
+      initialized = RingBufT_Success;
+   }
+}
+
+template <typename Type>
+int8_t RingBufT<Type>::Write(Type * val) {
+   int8_t retVal = RingBufT_Failure;
+
+   if ((initialized == RingBufT_Success) && (full == RingBufT_IsNotFull) && (val != NULL)) {
+      memcpy(&pBuf[tail++], val, sizeof(Type));
+      elementsUsed++;
+      empty = RingBufT_IsNotEmpty;
+      if (tail >= size) {
+         tail = 0;
+      }
+      if (head == tail) {
+         full = RingBufT_IsFull;
+      }
+      retVal = RingBufT_Success;
+   }
+
+   return retVal;
+}
+
+template <typename Type>
+int8_t RingBufT<Type>::Read(Type *pDest) {
+   int8_t retVal = RingBufT_Failure;
+
+   if ((initialized == RingBufT_Success) && (empty == RingBufT_IsNotEmpty) && (pDest != NULL)) {
+      memcpy(pDest, &pBuf[head++], sizeof(Type));
+      elementsUsed--;
+      full = RingBufT_IsNotFull;
+      if (head >= size) {
+         head = 0;
+      }
+      if (head == tail) {
+         empty = RingBufT_IsEmpty;
+      }
+      retVal = RingBufT_Success;
+   }
+
+   return retVal;
+}
+
+template <typename Type>
+int8_t RingBufT<Type>::IsEmpty() {
+   int8_t retVal = RingBufT_Failure;
+   
+   if (initialized == RingBufT_Success) {
+      retVal = empty;
+   }
+
+   return retVal;
+}
+
+template <typename Type>
+int8_t RingBufT<Type>::IsFull() {
+   int8_t retVal = RingBufT_Failure;
+   
+   if (initialized == RingBufT_Success) {
+      retVal = full;
+   }
+
+   return retVal;
+}
+
+template <typename Type>
+int8_t RingBufT<Type>::Peek(Type *pDest, uint8_t pos) {
+   int8_t retVal = RingBufT_Failure;
+
+   if ((initialized == RingBufT_Success) && (pos < size) && (empty == RingBufT_IsNotEmpty) && (pos < elementsUsed) && (pDest != NULL)) {
+      pos = (uint8_t)(pos + head);
+      if (pos >= size) {
+         pos = (uint8_t)(pos - (size - 1));
+      }
+      memcpy(pDest, &pBuf[pos], sizeof(Type));
+      retVal = RingBufT_Success;
+   }
+
+   return retVal;
+}
+
+template <typename Type>
+int8_t RingBufT<Type>::ElementsUsed() {
+   int8_t retVal = RingBufT_Failure;
+
+   if (initialized == RingBufT_Success) {
+      retVal = (int8_t)elementsUsed;
+   }
+
+   return retVal;
+}
+
+template <typename Type>
+int8_t RingBufT<Type>::ElementsAvailable() {
+   int8_t retVal = RingBufT_Failure;
+
+   if (initialized == RingBufT_Success) {
+      retVal = (int8_t)(size - elementsUsed);
+   } else {
+      puts("Buffer not initialized.");
+   }
+
+   return retVal;
+}
+
