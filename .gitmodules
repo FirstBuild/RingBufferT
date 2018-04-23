@@ -1,5 +1,0 @@
-[submodule "extras/Testing/cpputest"]
-	path = extras/Testing/cpputest
-	url = https://github.com/cpputest/cpputest
-[submodule "cpputest"]
-	branch = v3.8
