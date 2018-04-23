@@ -1,3 +1,0 @@
-[submodule "extras/Testing/cpputest"]
-	path = extras/Testing/cpputest
-	url = https://github.com/cpputest/cpputest
