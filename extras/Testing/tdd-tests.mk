@@ -21,6 +21,7 @@ CPPUTEST_USE_EXTENSIONS = Y
 CPP_PLATFORM = Gcc
 
 CPPUTEST_WARNINGFLAGS += -Wno-unknown-warning-option
+CPPUTEST_CXX_WARNINGFLAGS += -Wno-reserved-id-macro -Wno-keyword-macro
 
 # This line is overriding the default new macros.  This is helpful
 # when using std library includes like <list> and other containers
