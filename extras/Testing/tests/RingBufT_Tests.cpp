@@ -278,3 +278,27 @@ TEST(ringBufTests, WrapAroundIsHandled)
    }
 }
 
+TEST(ringBufTests, WorksWithUint32)
+{
+   uint8_t i;
+   uint32_t buf[10];
+   uint32_t val;
+   uint32_t dest;
+   RingBufT<uint32_t> ringBuf(buf, sizeof(buf)/sizeof(uint32_t));
+
+   // add some stuff
+   for(i=0; i<10; i++) {
+      val = ((uint32_t)i<<24) + ((uint32_t)i<<16) + ((uint32_t)i<<8) + ((uint32_t)i);
+      BYTES_EQUAL(RingBufT_Success, ringBuf.Write(&val)); 
+      BYTES_EQUAL(RingBufT_Success, ringBuf.Peek(&dest, i)); 
+      CHECK_EQUAL(val, dest);
+   }
+
+   for(i=0; i<10; i++) {
+      val = ((uint32_t)i<<24) + ((uint32_t)i<<16) + ((uint32_t)i<<8) + ((uint32_t)i);
+      BYTES_EQUAL(RingBufT_Success, ringBuf.Read(&dest)); 
+      CHECK_EQUAL(val, dest);
+   }
+
+   BYTES_EQUAL(RingBufT_IsEmpty, ringBuf.IsEmpty()); 
+}
