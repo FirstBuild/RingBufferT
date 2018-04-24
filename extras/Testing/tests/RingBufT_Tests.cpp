@@ -302,3 +302,35 @@ TEST(ringBufTests, WorksWithUint32)
 
    BYTES_EQUAL(RingBufT_IsEmpty, ringBuf.IsEmpty()); 
 }
+
+typedef struct AStruct_t {
+   int16_t data;
+   uint8_t flags;
+} AStruct_t;
+
+TEST(ringBufTests, WorksWithStruct)
+{
+   uint8_t i;
+   AStruct_t buf[10];
+   AStruct_t val;
+   AStruct_t dest;
+   RingBufT<AStruct_t> ringBuf(buf, sizeof(buf)/sizeof(uint32_t));
+
+   // add some stuff
+   for(i=0; i<10; i++) {
+      val.data = i;
+      BYTES_EQUAL(RingBufT_Success, ringBuf.Write(&val)); 
+      BYTES_EQUAL(RingBufT_Success, ringBuf.Peek(&dest, i)); 
+      CHECK_EQUAL(val.data, dest.data);
+      CHECK_EQUAL(val.flags, dest.flags);
+   }
+
+   for(i=0; i<10; i++) {
+      val.data = i;
+      BYTES_EQUAL(RingBufT_Success, ringBuf.Read(&dest)); 
+      CHECK_EQUAL(val.data, dest.data);
+      CHECK_EQUAL(val.flags, dest.flags);
+   }
+
+   BYTES_EQUAL(RingBufT_IsEmpty, ringBuf.IsEmpty()); 
+}
